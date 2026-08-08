@@ -199,7 +199,16 @@ void draw() {
     platform_x = (keyCode == LEFT)?(platform_x - platform_velocity):(platform_x + platform_velocity);
     platform_x = constrain(platform_x, active_region[0]+1, active_region[2]-platform_width);
   }
-  float[] rect = {platform_x, platform_baseline, platform_width, platform_height};
+// Mobile touch / mouse control
+if (mousePressed) {
+  platform_x = mouseX - platform_width / 2;
+  platform_x = constrain(
+    platform_x,
+    active_region[0] + 1,
+    active_region[2] - platform_width
+  );
+}
+float[] rect = {platform_x, platform_baseline, platform_width, platform_height};
   float[] circle = {ball_x, ball_y, ball_radius};
   float[] collision = resolve_collision_ball_rectangle(rect, circle);
   if (collision[0] > 0) {
