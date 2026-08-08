@@ -1,18 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Sea love breakout &hearts; PLAY ONLINE</title>
-  <script src="processing.min.js"></script>
-  <style>
 
-html,
-body {
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0,
+      maximum-scale=1.0, user-scalable=no">
+
+<title>Sea Love Breakout ♥ PLAY ONLINE</title>
+
+<script src="processing.min.js"></script>
+
+<style>
+
+html, body {
   margin: 0;
   padding: 0;
   width: 100%;
   min-height: 100%;
   background: #000;
-  color: white;
   overflow-x: hidden;
 }
 
@@ -22,40 +27,84 @@ body {
   margin: 0 auto;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
   overflow: hidden;
   touch-action: none;
 }
 
-canvas {
-  display: block !important;
-  width: 100% !important;
-  max-width: 750px !important;
-  height: auto !important;
+#gameCanvas {
+  display: block;
+  width: 750px;
+  height: 530px;
+  max-width: 100%;
   margin: 0 auto;
   touch-action: none;
 }
 
-@media (max-width: 750px) {
+@media screen and (max-width: 750px) {
 
   .game-wrapper {
-    width: 100vw;
-    max-width: 100vw;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
+    width: 100%;
+    max-width: 100%;
   }
 
-  canvas {
-    width: 100vw !important;
-    max-width: 100vw !important;
+  #gameCanvas {
+    width: 100% !important;
     height: auto !important;
+    max-width: 750px !important;
   }
 
 }
 
 </style>
+
+</head>
+
+<body>
+
+<div class="game-wrapper">
+
+<canvas
+  id="gameCanvas"
+  width="750"
+  height="530"
+  data-processing-sources="sea_love_breakout.pde">
+</canvas>
+
 </div>
+
+<script>
+
+const canvas = document.getElementById("gameCanvas");
+
+canvas.addEventListener("touchstart", function(e) {
+  e.preventDefault();
+}, {passive:false});
+
+canvas.addEventListener("touchmove", function(e) {
+  e.preventDefault();
+
+  const touch = e.touches[0];
+  const rect = canvas.getBoundingClientRect();
+
+  const scaleX = canvas.width / rect.width;
+  const x = (touch.clientX - rect.left) * scaleX;
+
+  const event = new MouseEvent("mousemove", {
+    bubbles: true,
+    cancelable: true,
+    clientX: touch.clientX,
+    clientY: touch.clientY
+  });
+
+  canvas.dispatchEvent(event);
+
+}, {passive:false});
+
+canvas.addEventListener("touchend", function(e) {
+  e.preventDefault();
+}, {passive:false});
+
+</script>
+
 </body>
 </html>
-
