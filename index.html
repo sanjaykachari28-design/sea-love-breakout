@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Sea Love Breakout</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#07131f;color:#fff;font-family:Arial,Helvetica,sans-serif}
+body{display:flex;justify-content:center;padding:14px}
+.game-shell{width:min(1180px,100%);margin:auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.brand{font-size:clamp(22px,3vw,34px);font-weight:900;letter-spacing:-1px}
+.brand span{color:#18d9ff}
+.buttons{display:flex;gap:8px}
+button{border:0;border-radius:12px;background:#102b3d;color:#fff;padding:10px 14px;font-weight:700;cursor:pointer}
+button:hover{background:#17425b}
+.stage{position:relative;width:100%;aspect-ratio:16/9;min-height:300px;max-height:760px;background:#062b3d;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px #0008;border:1px solid #1a5870}
+canvas{display:block;width:100%;height:100%;touch-action:none}
+.hint{text-align:center;color:#9dc3d3;font-size:13px;margin-top:10px}
+.touch{display:none;gap:12px;justify-content:center;margin-top:12px}
+.touch button{width:120px;font-size:20px;padding:13px;background:#123c51}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#03101acc;z-index:5}
+.card{width:min(430px,90%);text-align:center;background:#092335ee;border:1px solid #27718c;border-radius:20px;padding:25px;box-shadow:0 20px 60px #0009}
+.card h1{margin:0 0 8px;font-size:32px}
+.card p{color:#b7d6df;margin:8px 0 18px}
+.primary{background:#12bfe8;color:#00131b;font-size:17px;padding:13px 22px}
+.stats{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;z-index:3;pointer-events:none}
+.stat{background:#031824bb;border:1px solid #4bb4ce55;border-radius:12px;padding:7px 11px;font-weight:800;font-size:14px;backdrop-filter:blur(4px)}
+@media(max-width:700px){
+ body{padding:7px}
+ .topbar{align-items:flex-start}
+ .buttons button{padding:8px 10px;font-size:12px}
+ .stage{aspect-ratio:10/16;min-height:520px;border-radius:14px}
+ .touch{display:flex}
+ .hint{display:none}
+ .card h1{font-size:26px}
+ .stat{font-size:12px;padding:6px 8px}
+}
+</style>
+</head>
+<body>
+<div class="game-shell">
+  <div class="topbar">
+    <div class="brand">GAME<span>VOLTX</span></div>
+    <div class="buttons">
+      <button id="pauseBtn">⏸ Pause</button>
+      <button id="soundBtn">🔊 Sound</button>
+      <button id="restartBtn">↻ Restart</button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <canvas id="game"></canvas>
+    <div class="stats">
+      <div class="stat">❤️ <span id="lives">3</span></div>
+      <div class="stat">⭐ <span id="score">0</span></div>
+      <div class="stat">🌊 Level <span id="level">1</span></div>
+    </div>
+    <div class="overlay" id="overlay">
+      <div class="card">
+        <h1>🌊 Sea Love Breakout</h1>
+        <p>Break every sea block, keep the ball alive and reach the next level.</p>
+        <button class="primary" id="startBtn">▶ Play Game</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="touch">
+    <button id="leftBtn">◀ LEFT</button>
+    <button id="rightBtn">RIGHT ▶</button>
+  </div>
+  <div class="hint">Desktop: ← → or A/D • Mouse also works • Mobile: use the buttons or drag on the game</div>
+</div>
+
+<script>
+(()=>{
+"use strict";
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+const stage=document.getElementById("stage");
+const overlay=document.getElementById("overlay");
+const startBtn=document.getElementById("startBtn");
+const pauseBtn=document.getElementById("pauseBtn");
+const soundBtn=document.getElementById("soundBtn");
+const restartBtn=document.getElementById("restartBtn");
+const livesEl=document.getElementById("lives"),scoreEl=document.getElementById("score"),levelEl=document.getElementById("level");
+
+let W=960,H=540,dpr=1,started=false,paused=false,sound=true;
+let score=0,lives=3,level=1,raf=0,last=0;
+let paddle,ball,bricks=[],keys={left:false,right:false},audioCtx=null;
+
+function resize(){
+ dpr=Math.min(devicePixelRatio||1,2);
+ const r=stage.getBoundingClientRect(); W=Math.max(320,r.width); H=Math.max(300,r.height);
+ canvas.width=Math.round(W*dpr); canvas.height=Math.round(H*dpr);
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+ if(paddle){paddle.y=H-42;paddle.w=Math.max(86,W*.105);paddle.h=Math.max(10,W*.016);paddle.x=Math.min(paddle.x,W-paddle.w)}
+}
+window.addEventListener("resize",resize);
+
+function resetBall(){
+ const speed=Math.min(620,360+level*28);
+ ball={x:W/2,y:H-75,r:Math.max(6,Math.min(10,W*.009)),vx:(Math.random()<.5?-1:1)*speed*.55,vy:-speed};
+}
+function makeLevel(){
+ bricks=[];
+ const rows=Math.min(6,4+Math.floor((level-1)/2)), cols=Math.min(11,Math.max(6,Math.floor(W/92)));
+ const gap=Math.max(6,W*.009), side=Math.max(18,W*.055);
+ const bw=(W-side*2-gap*(cols-1))/cols, bh=Math.max(18,Math.min(29,H*.045));
+ for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){
+   if(level>2 && r===rows-1 && c%5===0) continue;
+   bricks.push({x:side+c*(bw+gap),y:72+r*(bh+gap),w:bw,h:bh,hp:1,color:r%5});
+ }
+}
+function resetGame(){
+ score=0;lives=3;level=1;started=false;paused=false;
+ paddle={x:W/2-70,y:H-42,w:Math.max(86,W*.105),h:Math.max(10,W*.016),speed:W*.9};
+ resetBall();makeLevel();updateUI();
+ overlay.style.display="flex";
+ document.querySelector(".card h1").textContent="🌊 Sea Love Breakout";
+ document.querySelector(".card p").textContent="Break every sea block, keep the ball alive and reach the next level.";
+ startBtn.textContent="▶ Play Game";
+}
+function updateUI(){livesEl.textContent=lives;scoreEl.textContent=score;levelEl.textContent=level}
+function begin(){started=true;paused=false;overlay.style.display="none";last=performance.now();cancelAnimationFrame(raf);raf=requestAnimationFrame(loop)}
+function loseLife(){
+ lives--;updateUI();
+ if(lives<=0){gameOver();return}
+ resetBall();
+}
+function gameOver(){
+ started=false;paused=false;overlay.style.display="flex";
+ document.querySelector(".card h1").textContent="💔 Game Over";
+ document.querySelector(".card p").textContent=`Final score: ${score} • Level reached: ${level}`;
+ startBtn.textContent="↻ Play Again";
+}
+function nextLevel(){
+ level++;updateUI();makeLevel();resetBall();
+}
+function beep(freq,dur=.05){
+ if(!sound)return;
+ try{
+  audioCtx ||= new (window.AudioContext||window.webkitAudioContext)();
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.frequency.value=freq;o.type="sine";g.gain.value=.035;
+  o.connect(g);g.connect(audioCtx.destination);o.start();o.stop(audioCtx.currentTime+dur);
+ }catch(e){}
+}
+function movePaddleTo(x){paddle.x=Math.max(0,Math.min(W-paddle.w,x-paddle.w/2))}
+function draw(){
+ const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,"#073f57");grad.addColorStop(1,"#031e31");ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ for(let i=0;i<18;i++){ctx.strokeStyle="rgba(110,210,230,.13)";ctx.lineWidth=2;ctx.beginPath();let y=(i*67+(Date.now()*.018)%67);ctx.arc((i*97)%W,y,4+(i%4)*3,0,Math.PI*2);ctx.stroke()}
+ bricks.forEach(b=>{const colors=["#32d7b8","#38c4db","#4da4ed","#596cf0","#6246e8"];ctx.fillStyle=colors[b.color];roundRect(b.x,b.y,b.w,b.h,8);ctx.fill();ctx.fillStyle="rgba(255,255,255,.16)";roundRect(b.x+2,b.y+2,b.w-4,b.h*.3,6);ctx.fill()});
+ ctx.fillStyle="#ff5fa2";ctx.shadowColor="#ff5fa2";ctx.shadowBlur=18;ctx.beginPath();ctx.arc(ball.x,ball.y,ball.r,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+ ctx.fillStyle="#f4fbff";roundRect(paddle.x,paddle.y,paddle.w,paddle.h,7);ctx.fill();
+}
+function roundRect(x,y,w,h,r){ctx.beginPath();ctx.roundRect(x,y,w,h,r)}
+function update(dt){
+ let dir=(keys.right?1:0)-(keys.left?1:0);
+ paddle.x+=dir*paddle.speed*dt;paddle.x=Math.max(0,Math.min(W-paddle.w,paddle.x));
+ ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+ if(ball.x-ball.r<0){ball.x=ball.r;ball.vx=Math.abs(ball.vx);beep(260)}
+ if(ball.x+ball.r>W){ball.x=W-ball.r;ball.vx=-Math.abs(ball.vx);beep(260)}
+ if(ball.y-ball.r<0){ball.y=ball.r;ball.vy=Math.abs(ball.vy);beep(300)}
+ if(ball.y-ball.r<paddle.y+paddle.h && ball.y+ball.r>paddle.y && ball.x>paddle.x && ball.x<paddle.x+paddle.w && ball.vy>0){
+   const hit=(ball.x-(paddle.x+paddle.w/2))/(paddle.w/2);
+   const speed=Math.min(700,Math.hypot(ball.vx,ball.vy)*1.015);
+   ball.vx=hit*speed*.9;ball.vy=-Math.sqrt(Math.max(120*120,speed*speed-ball.vx*ball.vx));ball.y=paddle.y-ball.r;beep(420)
+ }
+ for(let i=bricks.length-1;i>=0;i--){
+   const b=bricks[i];
+   if(ball.x+ball.r>b.x&&ball.x-ball.r<b.x+b.w&&ball.y+ball.r>b.y&&ball.y-ball.r<b.y+b.h){
+     const overlapX=Math.min(ball.x+ball.r-b.x,b.x+b.w-(ball.x-ball.r));
+     const overlapY=Math.min(ball.y+ball.r-b.y,b.y+b.h-(ball.y-ball.r));
+     if(overlapX<overlapY) ball.vx*=-1; else ball.vy*=-1;
+     bricks.splice(i,1);score+=10*level;updateUI();beep(620,.045);break;
+   }
+ }
+ if(ball.y-ball.r>H){loseLife();beep(120,.12)}
+ if(bricks.length===0) nextLevel();
+}
+function loop(t){
+ if(!started)return;
+ const dt=Math.min(.025,(t-last)/1000);last=t;
+ if(!paused)update(dt);
+ draw();raf=requestAnimationFrame(loop);
+}
+function setPause(){
+ if(!started)return;
+ paused=!paused;pauseBtn.textContent=paused?"▶ Resume":"⏸ Pause";
+}
+function pointer(e){const r=canvas.getBoundingClientRect();movePaddleTo((e.touches?e.touches[0].clientX:e.clientX)-r.left)}
+canvas.addEventListener("pointermove",pointer);
+canvas.addEventListener("pointerdown",pointer);
+canvas.addEventListener("touchmove",e=>{e.preventDefault();pointer(e)},{passive:false});
+document.addEventListener("keydown",e=>{if(e.key==="ArrowLeft"||e.key.toLowerCase()==="a")keys.left=true;if(e.key==="ArrowRight"||e.key.toLowerCase()==="d")keys.right=true;if(e.key===" "){e.preventDefault();setPause()}});
+document.addEventListener("keyup",e=>{if(e.key==="ArrowLeft"||e.key.toLowerCase()==="a")keys.left=false;if(e.key==="ArrowRight"||e.key.toLowerCase()==="d")keys.right=false});
+function hold(btn,key){btn.addEventListener("pointerdown",()=>keys[key]=true);["pointerup","pointercancel","pointerleave"].forEach(x=>btn.addEventListener(x,()=>keys[key]=false))}
+hold(document.getElementById("leftBtn"),"left");hold(document.getElementById("rightBtn"),"right");
+startBtn.onclick=()=>{if(!started){resize();if(lives<=0){resetGame()}begin()}};
+pauseBtn.onclick=setPause;
+restartBtn.onclick=()=>{resetGame();resize()};
+soundBtn.onclick=()=>{sound=!sound;soundBtn.textContent=sound?"🔊 Sound":"🔇 Sound"};
+resize();resetGame();draw();
+})();
+</script>
+</body>
+</html>
